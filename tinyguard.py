@@ -35,23 +35,18 @@ def get_forbidden_imports(tree: ast.AST):
     """Yield (line number, imported module) for forbidden imports."""
     for node in ast.walk(tree):
 
-        # Example: import app.database.models
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if contains_forbidden_name(alias.name):
                     yield node.lineno, alias.name
 
-        # Example: from app.database import connect
-        # Example: from ..db import models
         elif isinstance(node, ast.ImportFrom):
             module = "." * node.level + (node.module or "")
 
             if contains_forbidden_name(module):
                 yield node.lineno, module
 
-            # Also catch imports such as:
-            # from app import database
-            # from .. import db
+
             for alias in node.names:
                 if contains_forbidden_name(alias.name):
                     imported = f"{module}.{alias.name}" if module else alias.name
@@ -65,7 +60,6 @@ def check_repository(root: Path) -> int:
     for filepath in discover_python_files(root):
         relative_path = filepath.relative_to(root)
 
-        # Only inspect files inside a directory named api.
         if "api" not in relative_path.parts[:-1]:
             continue
 
