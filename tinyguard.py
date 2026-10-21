@@ -1,100 +1,64 @@
+"""TinyGuard command-line entry point."""
 
-import ast
 import sys
+import tokenize
 from pathlib import Path
 
-
-FORBIDDEN_NAMES = {"db", "database"}
-IGNORED_DIRS = {".git", ".venv", "venv", "__pycache__"}
-
-
-def discover_python_files(root: Path) -> list[Path]:
-    """Find Python files recursively, excluding common generated directories."""
-    files = []
-
-    for path in root.rglob("*.py"):
-        if any(part in IGNORED_DIRS for part in path.parts):
-            continue
-        files.append(path)
-
-    return files
-
-
-def contains_forbidden_name(module_name: str) -> bool:
-    """Check whether a dotted module path contains db or database."""
-    if not module_name:
-        return False
-
-    return any(
-        part in FORBIDDEN_NAMES
-        for part in module_name.split(".")
-    )
-
-
-def get_forbidden_imports(tree: ast.AST):
-    """Yield (line number, imported module) for forbidden imports."""
-    for node in ast.walk(tree):
-
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if contains_forbidden_name(alias.name):
-                    yield node.lineno, alias.name
-
-        elif isinstance(node, ast.ImportFrom):
-            module = "." * node.level + (node.module or "")
-
-            if contains_forbidden_name(module):
-                yield node.lineno, module
-
-
-            for alias in node.names:
-                if contains_forbidden_name(alias.name):
-                    imported = f"{module}.{alias.name}" if module else alias.name
-                    yield node.lineno, imported
+from tinyguard.graph_engine import (
+    GraphBuildError,
+    build_dependency_graph,
+    find_forbidden_path,
+)
+from tinyguard.module_resolver import module_name_for_file
+from tinyguard.rules import discover_python_files, is_api_entrypoint
 
 
 def check_repository(root: Path) -> int:
-    """Scan API files and return the number of violations."""
+    """Check API entry points for direct and transitive forbidden imports."""
+    root = Path(root).resolve()
+    files = discover_python_files(root)
+    try:
+        graph = build_dependency_graph(root)
+    except GraphBuildError as exc:
+        for issue in exc.issues:
+            print(f"ERROR: {issue}")
+        print(f"\nTinyGuard failed: {len(exc.issues)} analysis error(s).")
+        return len(exc.issues)
+
+    entrypoints = [path for path in files if is_api_entrypoint(path.relative_to(root))]
+    if not entrypoints:
+        print("ERROR: No API entry points found; nothing was checked.")
+        return 2
+
     violations = 0
-
-    for filepath in discover_python_files(root):
+    for filepath in entrypoints:
         relative_path = filepath.relative_to(root)
-
-        if "api" not in relative_path.parts[:-1]:
-            continue
-
-        try:
-            source = filepath.read_text(encoding="utf-8")
-            tree = ast.parse(source, filename=str(filepath))
-        except (SyntaxError, UnicodeDecodeError) as exc:
-            print(f"ERROR: Could not parse {relative_path}: {exc}")
-            violations += 1
-            continue
-
-        for line_number, imported_module in get_forbidden_imports(tree):
+        start_module = module_name_for_file(root, filepath)
+        forbidden_path = find_forbidden_path(graph, start=start_module)
+        if forbidden_path:
             print(
-                f"VIOLATION: {relative_path}:{line_number}: "
-                f"API code imports forbidden module '{imported_module}'"
+                f"VIOLATION: {relative_path}: forbidden dependency chain: "
+                f"{' -> '.join(forbidden_path)}"
             )
             violations += 1
 
     if violations:
-        print(f"\nTinyGuard failed: {violations} issue(s) found.")
+        print(f"\nTinyGuard failed: {violations} violation(s) found.")
     else:
-        print("TinyGuard passed: no forbidden API imports found.")
-
+        print(
+            f"TinyGuard passed: {len(entrypoints)} API entry point(s) checked; "
+            "no forbidden dependencies found."
+        )
     return violations
 
 
 def main() -> int:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
-
     if not root.is_dir():
         print(f"ERROR: Not a directory: {root}", file=sys.stderr)
         return 2
-
-    violations = check_repository(root)
-    return 1 if violations else 0
+    result = check_repository(root)
+    return 0 if result == 0 else 1 if result == 1 else 2
 
 
 if __name__ == "__main__":
