@@ -1,0 +1,14 @@
+Repository: sqlmodel
+URL: https://github.com/fastapi/sqlmodel.git
+Commit: 462b59d9cd1cc3d9072735435330ef9ab6d15cbf
+Classification: UNCLASSIFIED
+Exit code: 2
+Runtime: 2.214 seconds
+Error: 
+
+STDOUT:
+ERROR: No API entry points found; nothing was checked.
+
+
+STDERR:
+

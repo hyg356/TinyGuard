@@ -153,3 +153,30 @@ if __name__ == "__main__":
         test_fn()
         print("PASS:", test_fn.__name__)
     print("\nAll hardening tests passed.")
+
+
+def test_nested_backend_source_root():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+
+        write(
+            root / "backend" / "app" / "api" / "routes" / "users.py",
+            "from app.api import deps\n",
+        )
+        write(
+            root / "backend" / "app" / "api" / "deps.py",
+            "from app.core import db\n",
+        )
+        write(
+            root / "backend" / "app" / "core" / "db.py",
+            "class Database: pass\n",
+        )
+
+        graph = build_dependency_graph(root / "backend")
+        path = find_forbidden_path(graph, "app.api.routes.users")
+
+        assert path == [
+            "app.api.routes.users",
+            "app.api.deps",
+            "app.core.db",
+        ], (graph, path)

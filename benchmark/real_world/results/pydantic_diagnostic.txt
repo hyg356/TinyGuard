@@ -1,0 +1,14 @@
+Repository: pydantic
+URL: https://github.com/pydantic/pydantic.git
+Commit: 824cf7bfbfdc5e921d62a82dedda7e5b0f9789dc
+Classification: UNCLASSIFIED
+Exit code: 2
+Runtime: 49.076 seconds
+Error: 
+
+STDOUT:
+ERROR: No API entry points found; nothing was checked.
+
+
+STDERR:
+

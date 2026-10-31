@@ -1,0 +1,46 @@
+
+TinyGuard detection benchmark — pilot
+=======================================================
+01_direct_violation              expected=VIOLATION  actual=VIOLATION  PASS
+  VIOLATION: api.py: forbidden dependency chain: api -> database
+  
+  TinyGuard failed: 1 violation(s) found.
+02_direct_safe                   expected=CLEAN      actual=CLEAN      PASS
+  TinyGuard passed: 1 API entry point(s) checked; no forbidden dependencies found.
+03_transitive_violation          expected=VIOLATION  actual=VIOLATION  PASS
+  VIOLATION: api.py: forbidden dependency chain: api -> logic -> database
+  
+  TinyGuard failed: 1 violation(s) found.
+04_transitive_safe               expected=CLEAN      actual=CLEAN      PASS
+  TinyGuard passed: 1 API entry point(s) checked; no forbidden dependencies found.
+05_relative_violation            expected=VIOLATION  actual=VIOLATION  PASS
+  VIOLATION: app/api/routes.py: forbidden dependency chain: app.api.routes -> app.database
+  
+  TinyGuard failed: 1 violation(s) found.
+06_relative_safe                 expected=CLEAN      actual=CLEAN      PASS
+  TinyGuard passed: 2 API entry point(s) checked; no forbidden dependencies found.
+07_package_reexport_violation    expected=VIOLATION  actual=VIOLATION  PASS
+  VIOLATION: api.py: forbidden dependency chain: api -> storage -> storage.database
+  
+  TinyGuard failed: 1 violation(s) found.
+08_package_reexport_safe         expected=CLEAN      actual=CLEAN      PASS
+  TinyGuard passed: 1 API entry point(s) checked; no forbidden dependencies found.
+09_src_layout_violation          expected=VIOLATION  actual=VIOLATION  PASS
+  VIOLATION: src/api.py: forbidden dependency chain: api -> database
+  
+  TinyGuard failed: 1 violation(s) found.
+10_src_layout_safe               expected=CLEAN      actual=CLEAN      PASS
+  TinyGuard passed: 1 API entry point(s) checked; no forbidden dependencies found.
+
+Results
+-------------------------------------------------------
+True positives:  5
+False positives: 0
+True negatives:  5
+False negatives: 0
+Analysis errors: 0
+
+Precision: 100.0%
+Recall:    100.0%
+F1 score:  100.0%
+Correct:   10/10

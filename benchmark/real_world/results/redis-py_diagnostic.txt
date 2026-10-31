@@ -1,0 +1,14 @@
+Repository: redis-py
+URL: https://github.com/redis/redis-py.git
+Commit: 05712b2f099576050f6a6e94dc0f39e657ccc87a
+Classification: UNCLASSIFIED
+Exit code: 2
+Runtime: 14.825 seconds
+Error: 
+
+STDOUT:
+ERROR: No API entry points found; nothing was checked.
+
+
+STDERR:
+

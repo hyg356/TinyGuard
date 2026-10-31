@@ -1,0 +1,14 @@
+Repository: click
+URL: https://github.com/pallets/click.git
+Commit: 2247b35ea1c47c727d7a06e51fa280e12a863ff6
+Classification: UNCLASSIFIED
+Exit code: 2
+Runtime: 2.01 seconds
+Error: 
+
+STDOUT:
+ERROR: No API entry points found; nothing was checked.
+
+
+STDERR:
+

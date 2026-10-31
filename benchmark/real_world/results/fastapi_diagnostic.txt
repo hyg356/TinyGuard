@@ -1,0 +1,14 @@
+Repository: fastapi
+URL: https://github.com/fastapi/fastapi.git
+Commit: 45cb2252c737906f37544f5ba6bee0295fb81468
+Classification: UNCLASSIFIED
+Exit code: 2
+Runtime: 9.5 seconds
+Error: 
+
+STDOUT:
+ERROR: No API entry points found; nothing was checked.
+
+
+STDERR:
+
