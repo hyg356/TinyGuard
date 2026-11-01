@@ -26,6 +26,10 @@ CASES = [
             )
         },
         "expected": "VIOLATION",
+        "expected_chain": (
+            "app.api.routes.utils -> app.core.db"
+        ),
+        "expected_entrypoint": "app/api/routes/utils.py",
     },
     {
         "id": "RW-TRANSITIVE-01",
@@ -40,8 +44,17 @@ CASES = [
                 '"""Temporary benchmark helper."""\n'
                 "from app.core import db as benchmark_db\n"
             ),
+            Path("backend/app/api/benchmark_probe.py"): (
+                '"""Isolated API entry point for the transitive dependency benchmark."""\n'
+                "\n"
+                "from app import benchmark_helper\n"
+            ),
         },
         "expected": "VIOLATION",
+        "expected_chain": (
+            "app.api.benchmark_probe -> app.benchmark_helper -> app.core.db"
+        ),
+        "expected_entrypoint": "app/api/benchmark_probe.py",
     },
 ]
 
@@ -90,9 +103,12 @@ def run_case(case):
     elapsed = round(time.perf_counter() - start, 3)
     output = result.stdout + "\n" + result.stderr
 
-    # TinyGuard may return exit code 2 when multiple violations exist.
-    # The actual detection result is determined from its diagnostic output.
-    if "VIOLATION:" in output and "TinyGuard failed:" in output:
+    expected_diagnostic = (
+        f"VIOLATION: {case['expected_entrypoint']}: "
+        f"forbidden dependency chain: {case['expected_chain']}"
+    )
+
+    if expected_diagnostic in output:
         actual = "VIOLATION"
     elif result.returncode == 0 and "TinyGuard passed" in output:
         actual = "CLEAN"
@@ -104,6 +120,7 @@ def run_case(case):
         "type": case["type"],
         "description": case["description"],
         "expected": case["expected"],
+        "expected_chain": case["expected_chain"],
         "actual": actual,
         "passed": actual == case["expected"],
         "runtime_seconds": elapsed,
@@ -139,6 +156,7 @@ def main():
                 "type": case["type"],
                 "description": case["description"],
                 "expected": case["expected"],
+                "expected_chain": case["expected_chain"],
                 "actual": "ERROR",
                 "passed": False,
                 "runtime_seconds": None,
@@ -150,6 +168,7 @@ def main():
         results.append(outcome)
 
         print("Expected:", outcome["expected"])
+        print("Expected chain:", case["expected_chain"])
         print("Actual:  ", outcome["actual"])
         print("Result:  ", "PASS" if outcome["passed"] else "FAIL")
         print("Runtime: ", outcome["runtime_seconds"], "seconds")
@@ -172,6 +191,7 @@ def main():
             "type",
             "description",
             "expected",
+            "expected_chain",
             "actual",
             "passed",
             "runtime_seconds",

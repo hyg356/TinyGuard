@@ -1,9 +1,9 @@
 Repository: flask
 URL: https://github.com/pallets/flask.git
 Commit: 49943b5a94413a530761350f04e896f76e8d620e
-Classification: UNCLASSIFIED
+Classification: NO_ENTRYPOINTS
 Exit code: 2
-Runtime: 1.62 seconds
+Runtime: 0.696 seconds
 Error: 
 
 STDOUT:

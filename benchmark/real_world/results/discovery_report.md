@@ -1,6 +1,6 @@
 # TinyGuard Real-World Repository Discovery
 
-Generated: 2026-10-31T14:59:52.618445+00:00
+Generated: 2026-11-01T07:08:03.105924+00:00
 
 ## Environment
 
@@ -12,32 +12,32 @@ Generated: 2026-10-31T14:59:52.618445+00:00
 
 | Repository | Clone status | Python files | TinyGuard | Runtime (s) | Commit |
 |---|---|---:|---|---:|---|
-| fastapi | cloned | 1219 | UNCLASSIFIED | 9.5 | 45cb2252c737 |
-| starlette | cloned | 84 | UNCLASSIFIED | 1.811 | 2745bbc5afa2 |
-| flask | cloned | 83 | UNCLASSIFIED | 1.62 | 49943b5a9441 |
-| requests | cloned | 37 | CLEAN | 0.9 | 3c7baaa05ab4 |
-| sqlmodel | cloned | 334 | UNCLASSIFIED | 2.214 | 462b59d9cd1c |
-| sqlalchemy | cloned | 676 | CLEAN | 39.593 | c6494316e0b4 |
-| pydantic | cloned | 3150 | UNCLASSIFIED | 49.076 | 824cf7bfbfdc |
-| httpx | cloned | 60 | UNCLASSIFIED | 1.277 | b5addb64f016 |
-| click | cloned | 91 | UNCLASSIFIED | 2.01 | 2247b35ea1c4 |
-| redis-py | cloned | 337 | UNCLASSIFIED | 14.825 | 05712b2f0995 |
+| fastapi | already_present | 1219 | NO_ENTRYPOINTS | 3.839 | 45cb2252c737 |
+| starlette | already_present | 84 | NO_ENTRYPOINTS | 0.819 | 2745bbc5afa2 |
+| flask | already_present | 83 | NO_ENTRYPOINTS | 0.696 | 49943b5a9441 |
+| requests | already_present | 37 | CLEAN | 0.465 | 3c7baaa05ab4 |
+| sqlmodel | already_present | 334 | NO_ENTRYPOINTS | 1.853 | 462b59d9cd1c |
+| sqlalchemy | already_present | 676 | CLEAN | 19.109 | c6494316e0b4 |
+| pydantic | already_present | 3150 | NO_ENTRYPOINTS | 25.164 | 132df974eaf9 |
+| httpx | already_present | 60 | NO_ENTRYPOINTS | 0.418 | b5addb64f016 |
+| click | already_present | 91 | NO_ENTRYPOINTS | 0.773 | 2247b35ea1c4 |
+| redis-py | already_present | 337 | NO_ENTRYPOINTS | 6.669 | 05712b2f0995 |
 
 ## Summary
 
 - Clean classifications: 2
 - Violation classifications: 0
 - Errors: 0
-- Unclassified: 8
+- Repositories without API entry points: 8
 
 ## Important interpretation limits
 
 This is a repository discovery and baseline execution run, not a
 scored accuracy benchmark. A repository's baseline result is not
 ground truth until its architecture and intended policy are reviewed.
-The direct and transitive violation injection experiments have not
-yet been performed. Repositories without suitable architectural
-boundaries must be excluded or replaced.
+Direct and transitive controlled injection experiments are reported
+separately. Repositories without suitable architectural boundaries
+are not included in the default-policy accuracy assessment.
 
 ## Reproduction
 

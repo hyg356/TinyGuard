@@ -42,6 +42,13 @@ def _resolve_module(project_root: Path, dotted_name: str) -> str | None:
     target_path = resolve_import(project_root, dotted_name)
     if target_path is None:
         return None
+    project_root = Path(project_root).resolve()
+    target_path = target_path.resolve()
+
+    try:
+        target_path.relative_to(project_root)
+    except ValueError:
+        return None
     if target_path.is_dir():
         # Namespace package directory. It has no __init__.py to map.
         relative = target_path.relative_to(project_root)

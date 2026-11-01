@@ -1,161 +1,468 @@
 # TinyGuard Benchmark Suite
 
-This directory contains the evaluation framework for **TinyGuard**, a Python architectural dependency guardrail designed to detect forbidden dependency relationships and support AI-assisted remediation.
+This directory contains controlled tests and initial real-world experiments for evaluating TinyGuard's architectural dependency analysis.
 
-The benchmark evaluates TinyGuard across controlled architectural scenarios, real-world Python repositories, and deliberately injected architectural violations.
+The benchmark suite is intended to make the project's behavior reproducible and to expose its limitations. It includes synthetic fixtures, a comparison with Import Linter, repository discovery scans, and controlled fault injection.
 
-## 1. Benchmark Structure
+> **Evaluation status:** the suite contains several completed experiments, but not every benchmark track is complete. In particular, the mutation runner currently records a baseline and marks mutations as not yet tested. Repository discovery is not a scored accuracy benchmark, and the real-world fault-injection experiment currently covers two cases in one FastAPI-based codebase.
+
+## 1. Benchmark overview
+
+| Track | Purpose | Current status |
+|---|---|---|
+| Pilot | Initial 10-case sanity check | Results saved |
+| Standard fixtures | 100 controlled cases across five categories | Results saved |
+| Head-to-head | Compare TinyGuard with Import Linter on a shared corpus | Results and report saved |
+| Mutation | Establish baseline and prepare mutation experiments | Incomplete |
+| Real-world discovery | Scan 10 open-source repositories | All 10 scans completed |
+| Real-world injection | Verify detection of deliberately introduced violations | 2 of 2 cases passed |
+
+These tracks answer different questions. Results should not be combined into a single accuracy score.
+
+## 2. Directory structure
 
 ```text
 benchmark/
 ├── README.md
-├── datasets/
-│   ├── fixtures/
-│   └── standard_fixtures/
-├── scripts/
-│   ├── run_pilot.py
-│   ├── run_standard.py
-│   ├── mutation/
-│   │   └── run_mutations.py
-│   ├── head_to_head/
-│   │   └── run_benchmark.py
-│   └── real_world/
-│       ├── run_discovery.py
-│       └── run_injection_tests.py
-└── results/
-    ├── pilot.txt
-    ├── standard_results.csv
-    ├── head_to_head/
-    └── real_world/
-        ├── diagnostics/
-        ├── discovery_metrics.json
-        ├── discovery_report.md
-        ├── repository_results.csv
-        ├── injection_metrics.json
-        └── injection_results.csv
+├── fixtures/
+├── standard_fixtures/
+├── head_to_head/
+│   ├── run_benchmark.py
+│   └── results/
+│       ├── case_results.csv
+│       ├── metrics.json
+│       └── report.md
+├── mutation/
+│   ├── run_mutations.py
+│   └── results/
+├── real_world/
+│   ├── run_discovery.py
+│   ├── run_injection_tests.py
+│   └── results/
+│       ├── discovery_metrics.json
+│       ├── discovery_report.md
+│       ├── repository_results.csv
+│       ├── injection_metrics.json
+│       ├── injection_results.csv
+│       └── *_diagnostic.txt
+├── results/
+│   ├── pilot.txt
+│   └── standard_results.csv
+├── run_pilot.py
+└── run_standard.py
 ```
 
-*Note: This is the intended published organization. Individual result files may vary depending on which experiments have been executed.*
+Some fixture directories and result files are generated or refreshed by the benchmark scripts. Do not edit generated results manually when reporting a new run.
 
-## 2. Evaluation Categories
+## 3. Pilot benchmark
 
-### A. Controlled Fixture Benchmark
+**Script:** `run_pilot.py`
 
-The standard fixture suite contains **100 test cases**, divided into five architectural scenarios:
+The pilot benchmark runs 10 initial cases to provide a quick sanity check of TinyGuard's behavior.
 
-| Category | Safe cases | Violation cases |
-|---|---:|---:|
-| Direct dependencies | 10 | 10 |
-| Package re-exports | 10 | 10 |
-| Relative imports | 10 | 10 |
-| `src/` layouts | 10 | 10 |
-| Transitive dependencies | 10 | 10 |
-| **Total** | **50** | **50** |
-
-The suite evaluates whether TinyGuard can distinguish permitted dependency relationships from architectural violations across different Python import structures.
-
-### B. Pilot Benchmark
-
-The pilot benchmark provides an initial evaluation using a smaller collection of architectural fixtures.
-
-It serves as an early validation step before running the expanded standard fixture suite.
-
-### C. Head-to-Head Evaluation
-
-The head-to-head benchmark evaluates TinyGuard against an existing Python architecture-linting tool under selected dependency-policy scenarios.
-
-The purpose is to investigate differences in detection behavior, rather than assume that either tool is universally superior.
-
-### D. Real-World Repository Discovery
-
-TinyGuard was evaluated against a collection of established Python repositories and frameworks.
-
-This experiment examines how the analyzer behaves when presented with real-world project structures, including repositories that may not satisfy the analyzer's entrypoint or policy assumptions.
-
-Results distinguish detected violations, clean classifications, and unclassified cases.
-
-**Important:** A clean classification does not independently establish correctness without ground-truth architectural labels.
-
-### E. Real-World Fault Injection
-
-Controlled architectural violations were introduced into copies of a real-world FastAPI application.
-
-Two scenarios were evaluated:
-
-- **Direct violation:** Introduces a forbidden dependency directly into an API route.
-- **Transitive violation:** Introduces a dependency chain through an intermediate module that ultimately reaches a forbidden module.
-
-The original application is preserved; experiments operate on generated copies.
-
-## 3. Engineering Considerations
-
-The benchmark also exercises behavior around:
-
-- Direct and transitive dependency chains.
-- Relative imports and package re-exports.
-- Nested Python source roots.
-- `src/` project layouts.
-- Dynamic imports.
-- Third-party module resolution.
-- Malformed Python files and parsing failures.
-- Safe and violating architectural configurations.
-
-These scenarios help evaluate analyzer robustness beyond basic import detection.
-
-## 4. Reproducing Experiments
-
-Run benchmark scripts from the TinyGuard repository root.
-
-For example:
+Run from the repository root:
 
 ```bash
-python3 benchmark/scripts/run_pilot.py
-python3 benchmark/scripts/run_standard.py
+python3 benchmark/run_pilot.py
 ```
 
-Additional experiments are available under:
+The pilot output is also preserved in:
 
 ```text
-benchmark/scripts/mutation/
-benchmark/scripts/head_to_head/
-benchmark/scripts/real_world/
+benchmark/results/pilot.txt
 ```
 
-Refer to the individual scripts and their configuration for experiment-specific requirements.
+The pilot is an initial smoke-test benchmark. It should not be presented as a comprehensive evaluation.
 
-Real-world experiments may require cloning the upstream repositories used by the evaluation. Generated repository copies and upstream source clones are intentionally excluded from the published benchmark directory.
+## 4. Standard fixture benchmark
 
-## 5. Results and Interpretation
+**Script:** `run_standard.py`
 
-Experiment outputs are stored under `results/`.
+The standard benchmark contains 100 controlled fixture cases, divided into five categories.
 
-Depending on the experiment, these include:
+| Category | Violation cases | Safe cases | Total |
+|---|---:|---:|---:|
+| Direct imports | 10 | 10 | 20 |
+| Transitive dependencies | 10 | 10 | 20 |
+| Relative imports | 10 | 10 | 20 |
+| Package re-exports | 10 | 10 | 20 |
+| `src/` project layouts | 10 | 10 | 20 |
+| **Total** | **50** | **50** | **100** |
 
-- CSV files containing individual test outcomes.
-- JSON files containing aggregate metrics.
-- Markdown reports summarizing experiments.
-- Diagnostic text files containing analyzer output.
+### What the categories test
 
-Results should be interpreted within the scope of their corresponding experiment.
+**Direct imports**
 
-In particular, controlled fixtures and injected violations demonstrate behavior under specified conditions; they should not be interpreted as proof of general accuracy across all Python repositories.
+Checks direct dependencies from an API entry point to a forbidden module, including different import forms and aliases.
 
-## 6. Reproducibility and Limitations
+**Transitive dependencies**
 
-For reproducible comparisons, record:
+Checks whether TinyGuard can detect a forbidden dependency reached through intermediate modules at different chain depths.
 
-- TinyGuard version or commit.
-- Upstream repository commit hashes.
-- Python version and dependencies.
-- Benchmark configuration and architectural policies.
-- Exact commands used to execute experiments.
+**Relative imports**
 
-The current benchmark is an engineering evaluation suite, not an exhaustive assessment of Python architectural analysis.
+Checks relative import resolution inside package layouts.
 
-Its controlled fixtures, repository discovery experiments, and fault-injection scenarios provide complementary forms of evidence, each with different limitations.
+**Package re-exports**
 
-## 7. Project
+Checks whether a dependency can be followed through a package's `__init__.py` re-exports.
 
-TinyGuard combines deterministic dependency analysis with locally hosted LLM-assisted remediation.
+**`src/` project layouts**
 
-The benchmark is intended to make its detection behavior, limitations, and experimental results transparent and reproducible.
+Checks dependency resolution when application modules are located under a `src/` directory.
+
+### Run
+
+From the repository root:
+
+```bash
+python3 benchmark/run_standard.py
+```
+
+The script creates or refreshes the generated standard fixtures and writes:
+
+```text
+benchmark/results/standard_results.csv
+```
+
+The CSV contains the individual case outcomes and expected classifications.
+
+### Interpretation
+
+The standard benchmark is a hand-authored controlled fixture suite. Its expected labels are known because the cases are constructed specifically for the experiment.
+
+It measures behavior on the tested import patterns. It does not establish general accuracy across arbitrary Python repositories.
+
+## 5. Head-to-head comparison with Import Linter
+
+**Script:** `head_to_head/run_benchmark.py`
+
+This benchmark compares TinyGuard with [Import Linter](https://github.com/seddonym/import-linter) on a shared set of controlled fixture projects.
+
+The core policy is:
+
+> `app.api` must not depend directly or transitively on `app.database`.
+
+The benchmark includes ordinary import patterns such as:
+
+- Direct absolute imports.
+- `from` imports.
+- Transitive dependencies.
+- Relative imports.
+- Package re-exports.
+- Aliased imports.
+- Function-local imports.
+- Conditional imports.
+- Wildcard imports.
+- Nested database packages.
+- Safe dependency patterns and non-matching module names.
+
+TinyGuard also has a separate extension track for literal calls to:
+
+- `importlib.import_module("app.database")`
+- `__import__("app.database")`
+
+These extension cases are evaluated for TinyGuard but are not included in the Import Linter parity comparison.
+
+### Install the comparison dependency
+
+```bash
+python3 -m pip install import-linter
+```
+
+Confirm that `lint-imports` is available:
+
+```bash
+lint-imports --version
+```
+
+### Run
+
+From the repository root:
+
+```bash
+python3 benchmark/head_to_head/run_benchmark.py
+```
+
+### Output files
+
+```text
+benchmark/head_to_head/results/
+├── case_results.csv
+├── metrics.json
+├── report.md
+└── *_diagnostics.txt
+```
+
+The runner records:
+
+- Expected classification for each case.
+- TinyGuard classification and runtime.
+- Import Linter classification and runtime for core cases.
+- Exit codes.
+- Diagnostic output for cases where a tool reports an error.
+
+The metrics include:
+
+- True positives.
+- False positives.
+- True negatives.
+- False negatives.
+- Errors.
+- Precision.
+- Recall.
+- F1.
+- Accuracy on valid predictions.
+
+Errors are counted separately and excluded from the valid-prediction accuracy denominator.
+
+### Interpretation limits
+
+This is a controlled conformance comparison, not a general benchmark of all Python architecture policies.
+
+Import Linter and TinyGuard may use different import-resolution semantics. Individual disagreements should be inspected rather than automatically treated as defects in one tool.
+
+Runtime measurements are per-fixture measurements. They are not evidence of performance on very large repositories.
+
+Use the generated `metrics.json` and `report.md` for the actual numerical results. Do not claim that one tool is universally more accurate or faster based on this corpus alone.
+
+## 6. Mutation benchmark
+
+**Script:** `mutation/run_mutations.py`
+
+The mutation runner is currently a scaffold for future mutation testing.
+
+Its present behavior is:
+
+1. Run the project's baseline unit-test suite.
+2. Record whether the baseline passes.
+3. Write the mutation result records.
+4. Mark mutations as `NOT_YET_TESTED`.
+
+It does **not** currently apply mutations automatically or calculate a mutation score.
+
+Run from the repository root:
+
+```bash
+python3 benchmark/mutation/run_mutations.py
+```
+
+Do not report mutation coverage or a mutation score until actual mutations have been executed and their outcomes recorded.
+
+## 7. Real-world repository discovery
+
+**Script:** `real_world/run_discovery.py`
+
+This experiment scans a set of 10 open-source Python repositories:
+
+- FastAPI
+- Starlette
+- Flask
+- Requests
+- SQLModel
+- SQLAlchemy
+- Pydantic
+- HTTPX
+- Click
+- redis-py
+
+The discovery runner prepares the repository inputs and executes TinyGuard against them. Repository clones are generated under:
+
+```text
+benchmark/real_world/repos/
+```
+
+These downloaded repositories are inputs to the experiment, not part of TinyGuard's source code. They should not be committed to the TinyGuard repository.
+
+### Run
+
+From the repository root:
+
+```bash
+python3 benchmark/real_world/run_discovery.py
+```
+
+The runner writes results under:
+
+```text
+benchmark/real_world/results/
+```
+
+Important output files:
+
+- `repository_results.csv`
+- `discovery_metrics.json`
+- `discovery_report.md`
+- Individual diagnostic text files for relevant repositories.
+
+### Current experiment results
+
+The recorded discovery run completed all 10 repository scans:
+
+| Classification | Repositories |
+|---|---:|
+| Clean | 2 |
+| Violations | 0 |
+| Errors | 0 |
+| No recognized API entry points | 8 |
+| **Total** | **10** |
+
+The `NO_ENTRYPOINTS` classification means TinyGuard's default entry-point rules did not identify an API entry point in that repository. It does not mean the repository was checked and found architecturally clean.
+
+The two clean classifications mean no forbidden dependency path was reported among the entry points TinyGuard recognized. They are not independently verified ground-truth labels.
+
+### Interpretation
+
+This experiment provides initial evidence that TinyGuard can process a range of real-world Python repository layouts.
+
+It is primarily a repository compatibility and discovery experiment, not a scored accuracy benchmark. The results do not establish that TinyGuard correctly identifies every architectural violation in those projects.
+
+## 8. Real-world fault injection
+
+**Script:** `real_world/run_injection_tests.py`
+
+The fault-injection experiment checks whether TinyGuard detects known violations introduced into a real project.
+
+The current experiment uses the backend of the FastAPI-based `full-stack-fastapi` project.
+
+Two cases are tested:
+
+| Case | Injected dependency | Expected behavior |
+|---|---|---|
+| `RW-DIRECT-01` | API module imports the database module directly | Detect the exact direct chain |
+| `RW-TRANSITIVE-01` | API entry point imports a helper that imports the database module | Detect the exact indirect chain |
+
+The transitive case uses an isolated API probe so that the expected chain can be verified independently of other existing dependency paths.
+
+### Repository input
+
+The injection runner expects the FastAPI repository clone at:
+
+```text
+benchmark/real_world/repos/full-stack-fastapi
+```
+
+Run the discovery script first if you need it to prepare the repository inputs:
+
+```bash
+python3 benchmark/real_world/run_discovery.py
+```
+
+### Run
+
+From the repository root:
+
+```bash
+python3 benchmark/real_world/run_injection_tests.py
+```
+
+The script creates temporary working copies under:
+
+```text
+benchmark/real_world/injection_work/
+```
+
+It checks the exact expected diagnostics rather than treating any violation as a successful result.
+
+### Recorded result
+
+The current recorded experiment:
+
+| Case | Result |
+|---|---|
+| Direct injection | PASS |
+| Transitive injection | PASS |
+| **Total** | **2/2 passed** |
+
+The result files are:
+
+```text
+benchmark/real_world/results/injection_results.csv
+benchmark/real_world/results/injection_metrics.json
+```
+
+### Interpretation limits
+
+These are two controlled injections into one real codebase. They demonstrate that the tested direct and transitive violations were detected, but do not establish broad real-world accuracy.
+
+The FastAPI project may already contain architectural violations. The experiment verifies the expected injected chains rather than claiming that every finding in the repository is caused by the injection.
+
+## 9. Reproducing the main experiments
+
+Run the core tests:
+
+```bash
+python3 -m pytest -q
+```
+
+Run the pilot and standard fixtures:
+
+```bash
+python3 benchmark/run_pilot.py
+python3 benchmark/run_standard.py
+```
+
+Run the head-to-head comparison:
+
+```bash
+python3 -m pip install import-linter
+python3 benchmark/head_to_head/run_benchmark.py
+```
+
+Run repository discovery and injection:
+
+```bash
+python3 benchmark/real_world/run_discovery.py
+python3 benchmark/real_world/run_injection_tests.py
+```
+
+Run the mutation scaffold:
+
+```bash
+python3 benchmark/mutation/run_mutations.py
+```
+
+Some experiments generate repository clones, temporary working copies, and result files. Review the generated output before committing a new benchmark run.
+
+## 10. Reproducibility and reporting guidelines
+
+When publishing benchmark results, record:
+
+- Python version.
+- Operating system and architecture.
+- TinyGuard commit or source revision.
+- Import Linter version for head-to-head comparisons.
+- Exact commands used.
+- Raw CSV and JSON output.
+- Any errors, skipped cases, or cases without recognized entry points.
+
+Do not combine synthetic fixture accuracy, real-world discovery classifications, and fault-injection success into one overall accuracy figure. They measure different things.
+
+Do not treat a clean classification as verified ground truth unless the repository's architecture and expected policy have been independently reviewed.
+
+## 11. Current limitations and future work
+
+The benchmark suite is an early evaluation framework. Future work includes:
+
+1. Completing automated mutation execution and reporting.
+2. Expanding real-world fault injection across multiple repositories.
+3. Manually reviewing architectural ground truth for selected repositories.
+4. Evaluating more complex package and dynamic-import patterns.
+5. Measuring false positives and false negatives on independently labelled projects.
+6. Evaluating the quality and behavioral correctness of LLM-generated repairs.
+7. Comparing repair proposals with and without deterministic verification.
+
+The longer-term research direction is to investigate whether deterministic static verification can improve the reliability of architectural repairs proposed by small local language models.
+
+## 12. Summary
+
+The benchmark suite currently provides:
+
+- A 10-case pilot.
+- A 100-case controlled standard fixture suite.
+- A shared-corpus comparison with Import Linter.
+- Repository discovery scans across 10 open-source projects.
+- Two successful direct and transitive fault-injection cases on a FastAPI-based project.
+- A mutation-testing scaffold whose actual mutation phase remains incomplete.
+
+These experiments provide an initial, reproducible evaluation of TinyGuard's implementation. They should be interpreted within their stated scope and limitations.

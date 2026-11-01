@@ -1,9 +1,9 @@
 Repository: sqlmodel
 URL: https://github.com/fastapi/sqlmodel.git
 Commit: 462b59d9cd1cc3d9072735435330ef9ab6d15cbf
-Classification: UNCLASSIFIED
+Classification: NO_ENTRYPOINTS
 Exit code: 2
-Runtime: 2.214 seconds
+Runtime: 1.853 seconds
 Error: 
 
 STDOUT:

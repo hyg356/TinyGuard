@@ -119,14 +119,16 @@ def classify(result):
 
     output = result["stdout"] + "\n" + result["stderr"]
 
+    if "No API entry points found; nothing was checked." in output:
+        return "NO_ENTRYPOINTS"
+
     if result["returncode"] == 0 and "TinyGuard passed" in output:
         return "CLEAN"
 
-    if result["returncode"] == 1 and "VIOLATION:" in output:
+    if "VIOLATION:" in output and "TinyGuard failed:" in output:
         return "VIOLATION"
 
-    return "UNCLASSIFIED"
-
+    return "ERROR"
 def main():
     if not TINYGUARD.exists():
         print("ERROR: tinyguard.py was not found at:", TINYGUARD)
@@ -201,7 +203,7 @@ def main():
             f"STDERR:\n{result['stderr']}\n"
         )
 
-        if classification in ("ERROR", "UNCLASSIFIED"):
+        if classification in ("ERROR", "NO_ENTRYPOINTS"):
             diagnostic_path = RESULTS / f"{name}_diagnostic.txt"
             diagnostic_path.write_text(diagnostic, encoding="utf-8")
             row["diagnostic_file"] = str(diagnostic_path)
@@ -232,15 +234,16 @@ def main():
             r["tinyguard_result"] == "VIOLATION" for r in rows
         ),
         "errors": sum(r["tinyguard_result"] == "ERROR" for r in rows),
-        "unclassified": sum(
-            r["tinyguard_result"] == "UNCLASSIFIED" for r in rows
+        "no_entrypoints": sum(
+            r["tinyguard_result"] == "NO_ENTRYPOINTS" for r in rows
         ),
         "results": rows,
         "interpretation": (
             "Discovery only. Baseline classifications are not ground truth. "
-            "Each repository must be inspected for architectural boundaries "
-            "before scoring false positives or false negatives. No injected "
-            "violations have been tested in this stage."
+            "Repositories without applicable API entry points are classified "
+            "separately. Architectural boundaries must be reviewed before "
+            "scoring false positives or false negatives. Controlled injection "
+            "tests are reported separately."
         ),
     }
 
@@ -280,16 +283,16 @@ def main():
         f"- Clean classifications: {summary['clean']}",
         f"- Violation classifications: {summary['violations']}",
         f"- Errors: {summary['errors']}",
-        f"- Unclassified: {summary['unclassified']}",
+        f"- Repositories without API entry points: {summary['no_entrypoints']}",
         "",
         "## Important interpretation limits",
         "",
         "This is a repository discovery and baseline execution run, not a",
         "scored accuracy benchmark. A repository's baseline result is not",
         "ground truth until its architecture and intended policy are reviewed.",
-        "The direct and transitive violation injection experiments have not",
-        "yet been performed. Repositories without suitable architectural",
-        "boundaries must be excluded or replaced.",
+        "Direct and transitive controlled injection experiments are reported",
+        "separately. Repositories without suitable architectural boundaries",
+        "are not included in the default-policy accuracy assessment.",
         "",
         "## Reproduction",
         "",
@@ -306,7 +309,7 @@ def main():
     print("Clean:", summary["clean"])
     print("Violations:", summary["violations"])
     print("Errors:", summary["errors"])
-    print("Unclassified:", summary["unclassified"])
+    print("Repositories without API entry points:", summary["no_entrypoints"])
     print()
     print("Saved:")
     print(csv_path)

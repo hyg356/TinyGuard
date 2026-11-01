@@ -1,9 +1,9 @@
 Repository: pydantic
 URL: https://github.com/pydantic/pydantic.git
-Commit: 824cf7bfbfdc5e921d62a82dedda7e5b0f9789dc
-Classification: UNCLASSIFIED
+Commit: 132df974eaf99818dd98988d21a175015857e9d9
+Classification: NO_ENTRYPOINTS
 Exit code: 2
-Runtime: 49.076 seconds
+Runtime: 25.164 seconds
 Error: 
 
 STDOUT:
