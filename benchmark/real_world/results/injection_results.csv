@@ -1,0 +1,22 @@
+case_id,type,description,expected,expected_chain,actual,passed,runtime_seconds,exit_code,stdout,stderr
+RW-DIRECT-01,direct,API route directly imports app.core.db,VIOLATION,app.api.routes.utils -> app.core.db,VIOLATION,True,0.541,1,"INFO: Detected Python source root: backend
+VIOLATION: app/api/deps.py: forbidden dependency chain: app.api.deps -> app.core.db
+VIOLATION: app/api/main.py: forbidden dependency chain: app.api.main -> app.api.routes.utils -> app.core.db
+VIOLATION: app/api/routes/items.py: forbidden dependency chain: app.api.routes.items -> app.api.deps -> app.core.db
+VIOLATION: app/api/routes/login.py: forbidden dependency chain: app.api.routes.login -> app.api.deps -> app.core.db
+VIOLATION: app/api/routes/private.py: forbidden dependency chain: app.api.routes.private -> app.api.deps -> app.core.db
+VIOLATION: app/api/routes/users.py: forbidden dependency chain: app.api.routes.users -> app.api.deps -> app.core.db
+VIOLATION: app/api/routes/utils.py: forbidden dependency chain: app.api.routes.utils -> app.core.db
+
+TinyGuard failed: 7 violation(s) found.",
+RW-TRANSITIVE-01,transitive,API route imports helper that imports app.core.db,VIOLATION,app.api.benchmark_probe -> app.benchmark_helper -> app.core.db,VIOLATION,True,0.973,1,"INFO: Detected Python source root: backend
+VIOLATION: app/api/benchmark_probe.py: forbidden dependency chain: app.api.benchmark_probe -> app.benchmark_helper -> app.core.db
+VIOLATION: app/api/deps.py: forbidden dependency chain: app.api.deps -> app.core.db
+VIOLATION: app/api/main.py: forbidden dependency chain: app.api.main -> app.api.routes.items -> app.api.deps -> app.core.db
+VIOLATION: app/api/routes/items.py: forbidden dependency chain: app.api.routes.items -> app.api.deps -> app.core.db
+VIOLATION: app/api/routes/login.py: forbidden dependency chain: app.api.routes.login -> app.api.deps -> app.core.db
+VIOLATION: app/api/routes/private.py: forbidden dependency chain: app.api.routes.private -> app.api.deps -> app.core.db
+VIOLATION: app/api/routes/users.py: forbidden dependency chain: app.api.routes.users -> app.api.deps -> app.core.db
+VIOLATION: app/api/routes/utils.py: forbidden dependency chain: app.api.routes.utils -> app.api.deps -> app.core.db
+
+TinyGuard failed: 8 violation(s) found.",

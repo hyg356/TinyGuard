@@ -1,0 +1,13 @@
+Repository: pydantic
+URL: https://github.com/pydantic/pydantic.git
+Commit: 577aa83f5075bff3bef0ffa119ef141675a44822
+Classification: ERROR
+Exit code: None
+Runtime: 180.012 seconds
+Error: Timed out after 180 seconds
+
+STDOUT:
+
+
+STDERR:
+

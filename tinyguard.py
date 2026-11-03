@@ -1,0 +1,154 @@
+
+"""TinyGuard command-line entry point."""
+
+import sys
+from enum import IntEnum
+from pathlib import Path
+
+from tinyguard.graph_engine import (
+    GraphBuildError,
+    build_dependency_graph,
+    find_forbidden_path,
+)
+from tinyguard.module_resolver import module_name_for_file
+from tinyguard.rules import (
+    IGNORED_DIRS,
+    discover_python_files,
+    is_api_entrypoint,
+)
+class ExitCode(IntEnum):
+    """Process exit codes. Each outcome has exactly one value."""
+
+    OK = 0
+    VIOLATIONS = 1
+    USAGE_ERROR = 2
+    NO_ENTRYPOINTS = 3
+    ANALYSIS_ERROR = 4
+
+
+def _analyze_root(root: Path):
+    """Build a graph and identify API entry points for one candidate root."""
+    graph = build_dependency_graph(root)
+    files = discover_python_files(root)
+
+    entrypoints = [
+        path
+        for path in files
+        if is_api_entrypoint(path.relative_to(root))
+    ]
+
+    edge_count = sum(len(edges) for edges in graph.values())
+
+    return graph, files, entrypoints, (edge_count, len(entrypoints))
+
+
+def _select_source_root(root: Path):
+    """Select a uniquely better nested Python source root, if one exists."""
+    root = Path(root).resolve()
+
+    root_graph, root_files, root_entrypoints, root_score = _analyze_root(root)
+
+    best_root = root
+    best_graph = root_graph
+    best_files = root_files
+    best_entrypoints = root_entrypoints
+    best_score = root_score
+    ambiguous = False
+
+    try:
+        children = sorted(root.iterdir())
+    except OSError:
+        return root, root_graph, root_files, root_entrypoints
+
+    for candidate in children:
+        if not candidate.is_dir():
+            continue
+
+        if candidate.name.startswith(".") or candidate.name in IGNORED_DIRS:
+            continue
+
+        try:
+            graph, files, entrypoints, score = _analyze_root(candidate)
+        except GraphBuildError:
+            continue
+
+        if not entrypoints:
+            continue
+
+        if score > best_score:
+            best_root = candidate
+            best_graph = graph
+            best_files = files
+            best_entrypoints = entrypoints
+            best_score = score
+            ambiguous = False
+
+        elif score == best_score and candidate != best_root:
+            if score > root_score:
+                ambiguous = True
+
+    if ambiguous:
+        return root, root_graph, root_files, root_entrypoints
+
+    return best_root, best_graph, best_files, best_entrypoints
+
+
+def check_repository(root: Path) -> ExitCode:
+    """Check API entry points for direct and transitive forbidden imports.
+
+    Returns an ExitCode, never a count. Violation counts are printed, not returned.
+    """
+    root = Path(root).resolve()
+
+    try:
+        source_root, graph, files, entrypoints = _select_source_root(root)
+    except GraphBuildError as exc:
+        for issue in exc.issues:
+            print(f"ERROR: {issue}")
+        print(f"\nTinyGuard failed: {len(exc.issues)} analysis error(s).")
+        return ExitCode.ANALYSIS_ERROR
+
+    if source_root != root:
+        print(
+            "INFO: Detected Python source root: "
+            f"{source_root.relative_to(root)}"
+        )
+
+    if not entrypoints:
+        print("ERROR: No API entry points found; nothing was checked.")
+        return ExitCode.NO_ENTRYPOINTS
+
+    violations = 0
+    for filepath in entrypoints:
+        relative_path = filepath.relative_to(source_root)
+        start_module = module_name_for_file(source_root, filepath)
+        forbidden_path = find_forbidden_path(graph, start=start_module)
+        if forbidden_path:
+            print(
+                f"VIOLATION: {relative_path}: forbidden dependency chain: "
+                f"{' -> '.join(forbidden_path)}"
+            )
+            violations += 1
+
+    if violations:
+        print(f"\nTinyGuard failed: {violations} violation(s) found.")
+        return ExitCode.VIOLATIONS
+
+    print(
+        f"TinyGuard passed: {len(entrypoints)} API entry point(s) checked; "
+        "no forbidden dependencies found."
+    )
+    return ExitCode.OK
+
+
+def main() -> int:
+    root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
+    if not root.is_dir():
+        print(f"ERROR: Not a directory: {root}", file=sys.stderr)
+        return int(ExitCode.USAGE_ERROR)
+
+    return int(check_repository(root))
+
+
+if __name__ == "__main__":
+    sys.exit(main())
