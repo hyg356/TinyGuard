@@ -1,9 +1,0 @@
-VIOLATION: app/api/deps.py: forbidden dependency chain: app.api.deps -> app.core.db
-VIOLATION: app/api/main.py: forbidden dependency chain: app.api.main -> app.api.routes.items -> app.api.deps -> app.core.db
-VIOLATION: app/api/routes/items.py: forbidden dependency chain: app.api.routes.items -> app.api.deps -> app.core.db
-VIOLATION: app/api/routes/login.py: forbidden dependency chain: app.api.routes.login -> app.api.deps -> app.core.db
-VIOLATION: app/api/routes/private.py: forbidden dependency chain: app.api.routes.private -> app.api.deps -> app.core.db
-VIOLATION: app/api/routes/users.py: forbidden dependency chain: app.api.routes.users -> app.api.deps -> app.core.db
-VIOLATION: app/api/routes/utils.py: forbidden dependency chain: app.api.routes.utils -> app.api.deps -> app.core.db
-
-TinyGuard failed: 7 violation(s) found.
