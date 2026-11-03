@@ -1,92 +1,80 @@
 # TinyGuard
 
-**A lightweight Python architectural linter with experimental local-LLM-assisted repair suggestions.**
+**Detect architectural violations. Get AI-assisted repair suggestions. Keep control of your code.**
 
-TinyGuard analyzes Python projects to detect forbidden architectural dependencies. It builds a module dependency graph, identifies API entry points, and reports when an API module can reach a restricted module—such as a database layer—either directly or through intermediate modules.
+TinyGuard is a lightweight Python architectural linter with an experimental local-LLM remediation workflow.
 
-It also includes an experimental repair workflow that uses a locally hosted language model to propose changes. Proposed patches are checked statically in a temporary project copy and are **never applied automatically**.
+It analyzes Python projects, builds a module dependency graph, and detects when API modules depend on forbidden persistence-layer modules, either directly or through intermediate modules.
 
-> **Project status: Early prototype.** The analyzer has a deterministic test suite and has been evaluated on controlled benchmarks and a small number of real-world scenarios. The AI repair verifier checks structural compatibility, not behavioral equivalence. Review every proposed patch manually.
+When a violation is found, TinyGuard can use a small locally running language model to **suggest a potential repair**. The proposed changes are checked by a static verifier in a temporary copy of the project and saved as a reviewable diff.
 
----
+Your original source files are never automatically modified.
+
+> **Status: Early prototype.** Detection is covered by automated tests and controlled benchmarks. AI-generated repairs are experimental: static verification checks structural compatibility, not behavioral equivalence.
 
 ## Why TinyGuard?
 
-Architectural boundaries are easy to violate as Python projects grow.
-
-For example, an API module may be intended to communicate with the application logic layer rather than accessing the database directly. That dependency can appear harmless at first, but it creates tighter coupling and makes the architecture harder to maintain.
-
-The violation may also be indirect:
+Consider a layered application:
 
 ```text
-api
- └── logic.orders
-      └── database
+api.py
+  └── logic.orders
+        └── database
 ```
 
-A simple search for database imports inside API files would miss this transitive dependency.
+The API module does not import the database directly, but it still depends on the persistence layer through an intermediate module.
 
-TinyGuard analyzes the dependency graph to detect these paths and reports the shortest forbidden dependency chain it finds for each entry point.
+This creates architectural coupling that may violate the intended separation between API, business logic, and persistence.
 
-## Features
+TinyGuard detects this dependency chain and reports the path responsible for the violation.
 
-### Static architectural analysis
+But detection is only half the workflow.
 
-- Automatically identifies API entry points using configurable path conventions.
-- Builds a module dependency graph from Python source.
-- Detects direct and transitive dependencies on forbidden modules.
-- Follows relative imports and package re-exports.
-- Accounts for ancestor package initialization through `__init__.py`.
-- Handles namespace packages and common `src/` layouts.
-- Detects literal dynamic imports through `importlib.import_module()` and `__import__()`.
-- Reports unresolved computed dynamic imports as warnings.
-- Fails closed when a Python file cannot be parsed or decoded.
+Instead of leaving the developer with an error message, TinyGuard can pass relevant source context to a small local LLM and ask it to suggest a repair.
 
-### Configurable policies
+## Architecture
 
-Define forbidden modules, entry points, and excluded directories in `tinyguard.toml` or in `pyproject.toml` under `[tool.tinyguard]`.
+```mermaid
+flowchart TD
+    A["Python Project"] --> B["Source Discovery"]
+    B --> C["Import Analysis"]
+    C --> D["Module Dependency Graph"]
+    D --> E["Architectural Policy Checker"]
+    E --> F{"Forbidden dependency?"}
 
-### Multiple output formats
+    F -->|"No"| G["Clean Result"]
+    F -->|"Yes"| H["Violation Report"]
+    H --> I["Relevant Source Context Selection"]
+    I --> J["Local Small LLM"]
+    J --> K["Repair Proposal"]
+    K --> L["Proposal Validation"]
+    L --> M["Temporary Project Copy"]
+    M --> N["Static Patch Verification"]
+    N --> O{"Verification passed?"}
 
-- Human-readable terminal output.
-- JSON output for programmatic use.
-- GitHub Actions error annotations.
+    O -->|"Yes"| P["Save Proposal and Diff"]
+    O -->|"No"| Q["Mark Not Verified / Failed"]
+    P --> R["Developer Reviews Suggestion"]
+    Q --> R
+```
 
-### Experimental AI-assisted repair
+The architecture deliberately separates deterministic analysis from probabilistic repair suggestions:
 
-TinyGuard can ask a locally hosted language model to propose a repair for a detected violation.
+- **Dependency analysis** determines whether a policy violation exists.
+- **The local LLM** proposes a possible way to resolve it.
+- **The static verifier** checks structural constraints on the proposed changes.
+- **The developer** decides whether to accept and apply the proposal.
 
-The workflow:
-
-1. Selects relevant project files based on the dependency chain and surrounding imports.
-2. Sends the selected context to a local model.
-3. Validates the model's structured proposal and restricts edits to files it was shown.
-4. Applies the proposed changes in a temporary copy of the project.
-5. Runs static verification against the patched copy.
-6. Writes a proposal and diff for human review.
-
-The original project is not modified, and proposals are never applied automatically.
-
----
+The LLM does not decide whether the original dependency violation exists.
 
 ## Quick start
 
-### Requirements
-
-- Python 3.10 or newer.
-- No third-party dependencies are required for the core analyzer.
-- Python 3.10 requires `tomli` if you want to read TOML configuration files.
-
-Clone the repository:
+Requires **Python 3.10 or later**.
 
 ```bash
 git clone https://github.com/hyg356/TinyGuard.git
 cd TinyGuard
-```
 
-Run TinyGuard against a Python project:
-
-```bash
 python3 tinyguard.py /path/to/your/project
 ```
 
@@ -98,218 +86,257 @@ VIOLATION: api.py: forbidden dependency chain: api -> logic.orders -> database
 TinyGuard failed: 1 violation(s) found.
 ```
 
-A project without detected violations produces a passing result.
-
 ### Exit codes
 
 | Exit code | Meaning |
 |---|---|
 | `0` | Analysis completed; no forbidden dependency chain was found. |
-| `1` | One or more forbidden dependency chains were found. |
-| `2` | TinyGuard could not complete the requested analysis, for example because of invalid arguments, configuration errors, parsing errors, or no recognized entry points. |
+| `1` | At least one forbidden dependency chain was found. |
+| `2` | Usage or configuration error. |
+| `3` | No API entry points were found. |
+| `4` | Analysis error, such as a source file that could not be parsed. |
 
-An exit code of `2` should not be interpreted as a clean analysis. Check the diagnostic output.
-
-## Output formats
+### Output formats
 
 ```bash
 python3 tinyguard.py /path/to/project --format json
-```
-
-```bash
 python3 tinyguard.py /path/to/project --format github
 ```
 
-The JSON format is intended for other tools and scripts. The GitHub format emits workflow annotations that can appear in pull request checks.
+- `json` produces machine-readable results.
+- `github` produces GitHub Actions-compatible error annotations.
 
----
+## What TinyGuard detects
 
-## How dependency detection works
+### API entry points
 
-TinyGuard performs static analysis of Python source files.
-
-At a high level:
-
-```text
-Python project
-      |
-      v
-Discover Python modules
-      |
-      v
-Resolve imports
-      |
-      v
-Build dependency graph
-      |
-      v
-Identify API entry points
-      |
-      v
-Traverse dependency paths
-      |
-      v
-Check against forbidden modules
-      |
-      v
-Report violations
-```
-
-### Entry-point discovery
-
-By default, TinyGuard recognizes:
+By default, TinyGuard recognizes API entry points using conventions such as:
 
 - Files named `api.py`.
 - Files inside an `api/` directory.
 - Files inside `routes/`, `routers/`, `views/`, or `endpoints/` directories.
 
-Directories such as `tests/`, `test/`, `docs/`, `examples/`, `build/`, and `dist/` are excluded from default entry-point discovery.
+Directories such as `tests/`, `test/`, `docs/`, `examples/`, `build/`, and `dist/` are excluded from entry-point detection.
 
-These conventions can be overridden through configuration.
+### Forbidden dependencies
 
-### Forbidden modules
+The default policy includes:
 
-The default policy targets database-related module names, including `db` and `database`, as well as configured database drivers and ORM modules.
+- Dotted module components named `db` or `database`.
+- Common database drivers and persistence libraries, including `sqlite3`, `aiosqlite`, `sqlalchemy`, `sqlmodel`, `peewee`, `psycopg`, `psycopg2`, `asyncpg`, `pymysql`, `MySQLdb`, `pyodbc`, `oracledb`, and `pymongo`.
 
-Matching is based on module components rather than arbitrary substrings. For example, a component named `db` matches `app.db`, but does not match `db_utils`.
+Matching is component-based: `app.db` matches, while `db_utils` does not.
 
-The forbidden-module list can be customized for a project's architecture.
+### Import analysis
 
-### Dependency chains
+TinyGuard handles:
 
-TinyGuard traverses the dependency graph to find paths from API entry points to forbidden modules.
+- `import` and `from ... import` statements.
+- Relative imports.
+- Package `__init__.py` re-exports.
+- Namespace packages.
+- `src/` layouts.
+- Ancestor package imports.
+- Imports inside functions and `TYPE_CHECKING` blocks.
+- BOM and PEP 263 source encodings.
+- Constant-string calls to `importlib.import_module()` and `__import__()`.
 
-For example:
+Dynamic imports whose targets cannot be resolved statically are reported as warnings rather than silently treated as safe.
 
-```text
-api.py
-  |
-  v
-logic.orders
-  |
-  v
-database
+### Fail-closed behavior
+
+A Python file that cannot be decoded or parsed is treated as an analysis error rather than silently skipped.
+
+This avoids reporting a project as clean when TinyGuard could not fully inspect its source.
+
+## AI-assisted repair suggestions
+
+This is one of TinyGuard's defining features.
+
+When TinyGuard detects a forbidden dependency chain, its experimental remediation workflow can use a locally running language model to suggest a potential architectural repair.
+
+The workflow is designed to avoid sending the entire project indiscriminately to the model.
+
+### How it works
+
+1. **Violation detection:** The deterministic analyzer identifies the forbidden dependency chain.
+2. **Context selection:** TinyGuard selects relevant files, including modules in the chain, ancestor packages, and nearby local imports, within a context budget.
+3. **LLM proposal:** A local model receives the selected source context and the violation, then proposes a repair in a structured JSON format.
+4. **Proposal validation:** TinyGuard validates the response, required fields, confidence information, and permitted file paths.
+5. **Temporary patching:** Proposed changes are applied to a temporary copy of the project.
+6. **Static verification:** The verifier checks whether the patched project satisfies structural requirements.
+7. **Human review:** TinyGuard saves the proposal and diff for the developer to inspect.
+
+### Run the local model
+
+TinyGuard uses Ollama for its experimental local-model workflow. The default model is `qwen2.5:3b`.
+
+```bash
+ollama pull qwen2.5:3b
 ```
 
-The reported chain makes the architectural violation easier to locate than a simple list of imports.
+Start Ollama and use TinyGuard's proposal workflow:
 
----
+```bash
+python3 tinyguard.py /path/to/project --propose --out tinyguard-proposals
+```
+
+### What verification checks
+
+The static verifier checks that the patched project:
+
+- Parses and decodes successfully.
+- Has no forbidden dependency chain from any detected API entry point.
+- Retains the original public top-level functions, classes, and public methods.
+- Does not replace meaningful function implementations with trivial stub bodies.
+- Does not leave cross-module references to names that the patched module no longer binds.
+- Does not introduce unresolved dynamic imports.
+
+Proposals that fail verification are not marked as verified. Proposals with insufficient context, low confidence, or changes outside the supplied file set are withheld.
+
+### Safety boundary
+
+**TinyGuard suggests fixes; it does not automatically repair your project.**
+
+- Original project files are never modified by the proposal workflow.
+- Proposed changes are checked in a temporary copy.
+- The resulting diff is saved for human review.
+- The developer remains responsible for deciding whether to apply a proposal.
+
+### What verification does not prove
+
+Static verification does not establish behavioral equivalence.
+
+A proposed patch may preserve function names and structural compatibility while changing actual program behavior. Such a patch could pass the current verifier.
+
+The verifier may also reject legitimate refactorings, such as renaming or moving public symbols, because it cannot reliably distinguish intended refactoring from accidental breakage.
+
+Every proposal must be reviewed and tested by a developer.
 
 ## Configuration
 
-TinyGuard supports `tinyguard.toml` at the project root or a `[tool.tinyguard]` section in `pyproject.toml`.
+TinyGuard supports configuration through `tinyguard.toml` or the `[tool.tinyguard]` section of `pyproject.toml`.
 
 Example:
 
 ```toml
 [tool.tinyguard]
 forbidden = ["db", "database", "redis_store"]
-entrypoints = ["**/api.py", "**/api/**", "**/handlers/**"]
+
+entrypoints = [
+    "**/api.py",
+    "**/api/**",
+    "**/handlers/**"
+]
+
 non_application_dirs = ["tests", "docs"]
-ignored_dirs = [".git", ".venv", "venv", "__pycache__", "node_modules"]
+
+ignored_dirs = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "node_modules"
+]
 ```
 
-Configuration lists replace the corresponding defaults. Include any default entries you still want to retain.
+Configuration lists replace the corresponding defaults. Repeat any default entries that you want to retain.
 
-Unknown configuration keys are treated as errors rather than silently ignored.
+Unknown configuration keys are errors, preventing misspelled settings from silently weakening the policy.
 
----
+Patterns are glob-style and relative to the project root.
 
-## AI-assisted repair
+## Benchmarks and evaluation
 
-TinyGuard's repair workflow is experimental and requires [Ollama](https://ollama.com/) running locally.
+TinyGuard has been evaluated through synthetic fixtures, a controlled comparison with Import Linter, and controlled injection experiments on a real FastAPI application.
 
-The default model is `qwen2.5:3b`.
-
-Pull the model:
-
-```bash
-ollama pull qwen2.5:3b
-```
-
-Generate repair proposals:
-
-```bash
-python3 tinyguard.py /path/to/project --propose --out tinyguard-proposals
-```
-
-For each violation, TinyGuard selects relevant source files automatically. The model is asked to return a structured proposal describing the files to change and the repair strategy.
-
-The proposed changes are checked in a temporary copy of the project. The workflow produces:
-
-```text
-tinyguard-proposals/
-├── proposal.json
-└── changes.diff
-```
-
-The proposal is intended for inspection and review—not automatic application.
-
-### What the verifier checks
-
-A proposed patch is accepted only if it passes the following static checks:
-
-1. The modified source files parse and decode successfully.
-2. No forbidden dependency chain remains from recognized API entry points.
-3. Previously defined public top-level functions, classes, and public methods are preserved.
-4. Functions that performed meaningful work have not been replaced with trivial implementations.
-5. Cross-module references to module attributes still resolve to names bound by the patched module.
-6. The patch introduces no new unresolved dynamic imports.
-
-The verifier also rejects proposals with insufficient context, low confidence, invalid output, or edits to files outside the set provided to the model.
-
-### Important limitations
-
-These checks do **not** prove that a patch preserves program behavior.
-
-For example, a function may still exist and return a value of the same general shape while producing incorrect results. TinyGuard does not execute the application or compare its runtime behavior before and after a patch.
-
-A proposal marked `verified` therefore means that it passed TinyGuard's structural checks—not that the repair is behaviorally correct.
-
-Run the project's own tests and review the diff before considering any proposed change.
-
----
-
-## Benchmarking and evaluation
-
-TinyGuard includes a benchmark suite intended to evaluate detection behavior, compare its results with an established tool, and test selected real-world scenarios.
-
-See [`benchmark/README.md`](benchmark/README.md) for the benchmark methodology, commands, result files, and limitations.
-
-### Current evaluation coverage
-
-| Evaluation | Coverage |
+| Evaluation | Result |
 |---|---|
-| Standard benchmark | 100 controlled cases across five import-pattern categories, with 50 violation and 50 safe cases. |
-| Head-to-head benchmark | Compares TinyGuard with Import Linter on a shared core test corpus, with a separate track for literal dynamic imports. |
-| Real-world discovery | Attempts analysis on 10 public Python repositories. |
-| Real-world fault injection | Two controlled dependency violations injected into a FastAPI-based project; both expected chains were detected. |
-| Mutation testing | A preliminary scaffold exists; a completed mutation score has not yet been established. |
+| Synthetic benchmark | 100/100 controlled fixtures passed |
+| Head-to-head core corpus | TinyGuard: 24/24 correct classifications |
+| Import Linter core corpus | 12/24 correct classifications |
+| Constant-string dynamic import extensions | 2/2 detected |
+| FastAPI controlled injections | 2/2 detected |
+| Automated test suite | 29 passed |
 
-### Interpreting the results
+### Synthetic benchmark
 
-The standard benchmark uses controlled, hand-authored fixtures. It demonstrates behavior on the tested patterns, not general accuracy across arbitrary Python projects.
+The synthetic benchmark contains 100 controlled fixtures across five categories:
 
-The real-world discovery experiment distinguishes between clean results, violations, errors, and repositories with no recognized API entry points. A repository with no recognized entry points has not received a meaningful clean analysis.
+- Direct imports.
+- Transitive imports.
+- Relative imports.
+- Package re-exports.
+- `src/` layouts.
 
-The fault-injection experiment tests whether TinyGuard detects two deliberately introduced dependency paths in one real project. It is useful evidence of integration behavior, but it is not a broad real-world accuracy study.
+TinyGuard passed all 100 fixtures, with no false positives or false negatives in this corpus.
 
-The head-to-head benchmark reports per-case outcomes and aggregate metrics. Comparative claims should be based on the generated results rather than assumed from the tools' feature sets.
+### Head-to-head comparison
 
----
+TinyGuard was compared with Import Linter 2.15 using a hand-authored 24-case core conformance corpus.
 
-## Running the tests
+| Metric | TinyGuard | Import Linter |
+|---|---:|---:|
+| True positives | 12 | 12 |
+| False positives | 0 | 12 |
+| True negatives | 12 | 0 |
+| False negatives | 0 | 0 |
+| Precision | 100% | 50% |
+| Recall | 100% | 100% |
+| F1 | 100% | 66.67% |
+| Accuracy | 100% | 50% |
 
-Install `pytest`:
+Two additional constant-string dynamic import cases were tested as TinyGuard-specific extensions.
+
+These results describe performance on this particular controlled corpus and policy. They do not establish that TinyGuard is generally superior to Import Linter.
+
+### Real-world controlled injection tests
+
+Two controlled violations were injected into a copy of `fastapi/full-stack-fastapi-template`:
+
+- A direct API-to-database dependency.
+- A transitive API-to-database dependency through an intermediate helper module.
+
+TinyGuard detected both cases.
+
+| Test | Result | Runtime |
+|---|---|---:|
+| Direct injection | PASS | 0.541 s |
+| Transitive injection | PASS | 0.973 s |
+
+The original cloned application was not modified.
+
+This experiment tests detection of a specified policy in one real application's structure. It is not a broad production accuracy evaluation.
+
+### Repository discovery
+
+A separate discovery run attempted to analyze ten repositories.
+
+| Classification | Count |
+|---|---:|
+| Clean | 2 |
+| Violations | 0 |
+| No recognized API entry points | 7 |
+| Errors | 1 |
+
+The Pydantic repository timed out after 180 seconds. Repositories without recognized API entry points were not evaluated for the intended API-to-persistence policy.
+
+These discovery results are not a scored accuracy benchmark.
+
+See [`benchmark/README.md`](benchmark/README.md) for methodology, detailed metrics, limitations, and reproduction commands.
+
+## Testing
+
+Install pytest:
 
 ```bash
-python3 -m pip install pytest
+pip install pytest
 ```
 
-On Python 3.10, install `tomli` if configuration tests require TOML parsing:
+On Python 3.10, install `tomli` if configuration-file support requires it:
 
 ```bash
-python3 -m pip install tomli
+pip install tomli
 ```
 
 Run the test suite:
@@ -318,91 +345,53 @@ Run the test suite:
 python3 -m pytest -q
 ```
 
-The suite is designed to run offline. Tests requiring a live Ollama model are skipped automatically when the local service is unavailable.
+The current regression suite contains 29 passing tests. It covers graph traversal, CLI behavior, configuration, import resolution, proposal validation, patch verification, and end-to-end behavior.
 
-The tests cover dependency graph construction, import resolution, CLI behavior, configuration, entry-point discovery, proposal validation, patch verification, and end-to-end behavior.
-
----
-
-## Project structure
-
-```text
-TinyGuard/
-├── tinyguard.py
-├── tinyguard/
-│   ├── module_resolver.py
-│   ├── import_resolver.py
-│   ├── graph_engine.py
-│   └── remediation.py
-├── tests/
-├── benchmark/
-│   ├── README.md
-│   ├── results/
-│   ├── head_to_head/
-│   ├── mutation/
-│   └── real_world/
-├── examples/
-├── pytest.ini
-├── .gitignore
-├── LICENSE
-└── README.md
-```
-
-The tree above highlights the main project areas; consult the repository for the complete file list.
-
----
+Some remediation tests require a running local Ollama model and are skipped automatically when it is unavailable.
 
 ## Known limitations
 
-- **Heuristic entry-point discovery:** Projects with unconventional layouts may need custom entry-point patterns.
-- **Static import analysis:** Imports performed through `exec`, `eval`, or other unsupported dynamic mechanisms may not be detected.
-- **Name-based policy:** A database dependency through a library not included in the forbidden policy may go unnoticed.
-- **One reported chain per entry point:** The current reporting behavior focuses on the shortest discovered forbidden chain rather than enumerating every possible path.
-- **Static repair verification:** Passing the verifier does not establish behavioral correctness.
-- **Public interface preservation:** Legitimate refactors that rename or move public symbols may be rejected.
-- **Analysis performance:** The analyzer parses project files and is not yet optimized for very large repositories.
-- **Local model quality:** Repair usefulness depends on the model, available context, and complexity of the violation.
-
----
+- Only the shortest forbidden dependency chain is reported for each entry point.
+- Detection is based on module names and configured policy.
+- Unusual dynamic imports, computed import targets, `exec`, and `eval` may not be fully analyzable.
+- Local variable names are not tracked with full semantic precision in every verifier check.
+- The repair workflow cannot create or delete source files.
+- Large repositories can take significant time to analyze.
+- Real-world evaluation currently covers a limited number of suitable application architectures.
+- AI repair quality has not yet been comprehensively evaluated.
+- Static verification does not prove behavioral correctness.
 
 ## Roadmap
 
-Potential next steps include:
-
-1. Add optional behavioral verification by running selected tests against a patched temporary project.
-2. Report every reachable forbidden module and identify the minimal set of dependency edges responsible for violations.
-3. Improve import resolution and reduce false positives across unusual Python project layouts.
-4. Add configurable severity levels and exclusion rules.
-5. Improve performance on large repositories.
-6. Evaluate repair quality systematically against a broader set of real architectural violations and compare it with unverified LLM-generated repairs.
-
----
+1. Expand real-world evaluation across applications with explicit architectural boundaries.
+2. Improve performance on large Python repositories.
+3. Add optional sandboxed execution and project-test verification for repair proposals.
+4. Evaluate repair quality and behavioral regressions.
+5. Report all reachable forbidden modules rather than only the shortest chain.
+6. Improve dynamic import analysis and reduce false positives.
+7. Add per-rule severity and exclusion controls.
 
 ## Related work
 
-TinyGuard operates in an established area of software architecture enforcement. Related projects include:
+- [Import Linter](https://github.com/seddonym/import-linter) — enforces import contracts in Python projects.
+- [Tach](https://github.com/gauge-sh/tach) — Python package architecture and dependency enforcement.
+- [DCLfix](https://arxiv.org/abs/1506.07589) — research on recommending repairs for architectural violations.
+- [SmellBench](https://arxiv.org/abs/2605.07001) — research on evaluating LLM agents for architectural smell repair.
 
-- [Import Linter](https://github.com/seddonym/import-linter) — checks Python import contracts, including layered and forbidden dependencies.
-- [Tach](https://github.com/gauge-sh/tach) — enforces module dependency boundaries and architectural constraints.
-
-TinyGuard does not claim to introduce dependency graph analysis or architectural linting as new concepts. Its focus is on combining lightweight Python dependency analysis with an experimental local-model repair workflow and static verification of proposed patches.
-
----
+TinyGuard does not claim novelty in architectural linting or automated repair as research areas. It explores how deterministic dependency analysis can supervise repair suggestions generated by a small local language model.
 
 ## Contributing
 
-Bug reports, minimal reproductions, and additional test cases are welcome.
+Issues and pull requests are welcome.
 
-Particularly useful contributions include:
+Useful contributions include:
 
-- Import-resolution edge cases.
-- Projects where entry-point discovery is incorrect.
-- False positives or missed dependency chains.
-- Repair proposals that pass structural verification but break behavior.
-- Reproducible benchmark cases from real Python projects.
-
-When reporting a detection issue, include a minimal project structure and the expected dependency behavior.
+- Minimal reproductions of incorrect dependency classifications.
+- New import-resolution regression tests.
+- Real-world repositories with clearly defined architectural policies.
+- Performance improvements.
+- Repair-verification edge cases.
 
 ## License
 
-TinyGuard is released under the MIT License. See [`LICENSE`](LICENSE).
+MIT. See [LICENSE](LICENSE).
